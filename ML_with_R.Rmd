@@ -1,0 +1,932 @@
+
+---
+title: "Machin Learning Methods with R"
+output: html_document
+---
+
+## Least Squares (LS)
+
+### Generation of the Data
+
+Here, we are generating synthetic data:
+
+- We initialize a reproducible random generation using set.seed(123).
+- x is a matrix of 60 random numbers uniformly distributed between 0 and 1. These numbers are reshaped into a 20x3 matrix (20 rows and 3 columns).
+- We then calculate y by multiplying matrix x with a vector of coefficients and adding some normally distributed noise.
+- Column names for the matrix x are set as "x1", "x2", and "x3".
+- The matrix is then combined with vector y into a dataframe d.
+- A scatterplot matrix of d is plotted to visualize relationships between variables.
+
+```{r}
+set.seed(123)
+x <- matrix(runif(60), ncol = 3)
+y <- x %*% c(1, 2, 0) + 0.1 * rnorm(20)
+colnames(x) <- paste("x", 1:3, sep = "")
+d <- data.frame(x, y = y)
+plot(d)
+```
+
+### Train
+
+Here, we are training several linear regression models:
+
+1. lm0: A constant model where the only predictor is the intercept.
+2. lm1: A simple linear regression model with x1 as the predictor.
+3. lm3: A multiple linear regression model using all three predictors (x1, x2, and x3).
+For each of these models, predictions are plotted against the actual y values. The red line represents a perfect prediction line where actual equals predicted.
+```{r}
+
+lm0 <- lm(y~1, data = d)
+lm0
+
+plot(d$y, predict(lm0), xlab="Actual y", ylab="Predicted y", main="Predictions from Constant Model")
+abline(a=0, b=1, col="red") # Line of perfect prediction
+
+lm1 <- lm(y~x1, data = d)
+lm1
+
+plot(d$y, predict(lm1), xlab="Actual y", ylab="Predicted y", main="Predictions from Model with x1")
+abline(a=0, b=1, col="red") # Line of perfect prediction
+
+lm3 <- lm(y~x1+x2+x3, data = d)
+lm3
+
+plot(d$y, predict(lm3), xlab="Actual y", ylab="Predicted y", main="Predictions from Full Model")
+abline(a=0, b=1, col="red") # Line of perfect prediction
+
+
+summary(lm3)
+```
+
+### Model Comparison with anova()
+
+The anova() function is employed to compare the models. First, the analysis of variance table for lm3 is displayed. After that, a comparison of all four models (lm0, lm1, lm2, and lm3) is done.
+
+```{r}
+print(anova(lm3))
+lm2 <- lm(y~x1+x2, data=d)
+print(anova(lm0, lm1, lm2, lm3))
+```
+
+### Body Fat Data Analysis
+
+We load the fat dataset from the UsingR package. Some data points and variables deemed as anomalies or unused are removed. A scatter plot is then generated to visualize the relationship between weight and body fat.
+
+```{r}
+library("UsingR")
+data(fat)
+fat <- fat[-c(31,39,42,86), -c(1,3,4,9)]# omitting strange values and unused variables
+attach(fat)
+
+plot(fat$weight, fat$body.fat, xlab="Weight", ylab="Body Fat", main="Body Fat vs Weight")
+```
+
+### Linear Model for Body Fat Data
+
+A linear regression model model.lm is built on a subset (2/3) of the data. The rest 1/3 is reserved for testing. The summary of this model is displayed.
+
+
+```{r}
+set.seed(123)
+n <- nrow(fat)
+train <- sample(1:n,round(n*2/3))
+test <- (1:n)[-train]
+model.lm <- lm(body.fat~., data = fat, subset=train)
+summary(model.lm)
+```
+
+### Model Evaluation
+
+The performance of model.lm is evaluated on the test data in terms of R-squared and Mean Squared Error (MSE). Predicted body fat values are then plotted against actual values to visualize the model's predictions.
+
+```{r}
+pred.lm <- predict(model.lm,newdata = fat[test,])
+cor(fat[test,"body.fat"],pred.lm)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.lm)^2) # MSE_test
+
+plot(fat[test,"body.fat"], pred.lm, xlab="Actual", ylab="Predicted", main="Actual vs Predicted Body Fat")
+abline(a=0, b=1, col="red") # Line of perfect prediction
+```
+
+### Stepwise selection - automatic model search
+
+We perform a stepwise variable selection method:
+
+1. The drop1() function tests what happens if one variable is dropped from the model.
+2. The update() function is used to modify the model by excluding the knee predictor.
+
+```{r}
+drop1(model.lm, test="F")
+
+summary(update(model.lm,.~.-knee))
+```
+
+### Automatic model search with step()
+
+The step() function is an automated approach to select the best model by adding or dropping predictors. This optimized model's predictions are evaluated on the test set.
+
+```{r}
+model.lmstep <- step(model.lm)
+
+pred.lmstep <- predict(model.lmstep,newdata = fat[test,])
+cor(fat[test,"body.fat"],pred.lmstep)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.lmstep)^2) # MSE_test
+```
+
+### Best subset regression with Leaps and Bound algorithm
+
+The regsubsets() function from the leaps package is used for best subset regression. This helps in identifying the best model using a specific number of predictors. The best model found here uses weight and abdomen as predictors. Its performance on the test set is then evaluated.
+
+```{r}
+library(leaps)
+lm.regsubset <- regsubsets(body.fat~., data=fat, nbest = 1, subset=train)
+summary(lm.regsubset)
+plot(lm.regsubset)
+
+modregsubset.lm <- lm(body.fat~weight+abdomen,data=fat,subset=train)
+pred.regsubset <- predict(modregsubset.lm,newdata = fat[test,])
+cor(fat[test,"body.fat"],pred.regsubset)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.regsubset)^2) # MSE_test
+```
+
+## PCR (Principal Component Regression)
+
+Principal Component Regression (PCR) is a regression technique that first reduces the predictors using Principal Component Analysis (PCA) and then builds a regression model based on the principal components.
+
+```{r}
+# Loading the necessary library
+library(pls)
+
+# Building the PCR Model:
+model.pcr <- pcr(body.fat~., data=fat, scale=TRUE, subset=train, validation="CV", segments=10, segment.type="random")
+summary(model.pcr)
+```
+
+Here, the `pcr()` function from the `pls` package is used. Predictors are scaled to mean-center and scale to unit variance. The model is trained on a subset of data, using cross-validation (`validation="CV"`) with 10 segments chosen randomly.
+
+```{r}
+# Evaluating the Model:
+pred.pcr <- predict(model.pcr,newdata=fat[test,],ncomp=12)
+cor(fat[test,"body.fat"],pred.pcr)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.pcr)^2) # MSE_test
+```
+
+Using the `predict()` function, predictions are generated from the PCR model. R^2 and Mean Squared Error (MSE) are computed for the test data.
+
+```{r}
+# Plotting the MSEP (Mean Squared Error of Prediction) vs. Number of Components:
+msep_val <- MSEP(model.pcr)
+msep_cv <- msep_val$val["CV", 1, ]
+plot(msep_cv, type = "b", xlab = "Number of Components", ylab = "MSEP", main = "MSEP vs Number of Components")
+```
+
+This plot helps in determining how many components (or PCs) are optimal for the PCR model.
+
+```{r}
+# Visualizing Predictions:
+plot(fat[test, "body.fat"], pred.pcr, xlab = "Measured", ylab = "Predicted", main = "Measured vs Predicted")
+abline(a = 0, b = 1, col = "red")  # Adds a 45-degree line for reference
+```
+
+This scatter plot shows the measured vs. predicted body fat values. The 45-degree reference line (in red) indicates where predictions would be perfect.
+
+
+## PLS Regression (Partial Least Squares Regression)
+
+PLS regression is used in situations where predictors are highly collinear or when there are more predictors than observations.
+
+```{r}
+# Building the PLS Model:
+model.pls <- plsr(body.fat~., data=fat, scale=TRUE, subset=train,validation="CV", segments=10, segment.type="random")
+summary(model.pls)
+```
+
+The `plsr()` function from the `pls` package is used to fit a PLS regression model. Predictors are scaled, and the model is trained using cross-validation with 10 random segments.
+
+```{r}
+# Evaluating the Model:
+pred.pls <- predict(model.pls,newdata=fat[test,],ncomp=7)
+cor(fat[test,"body.fat"],pred.pls)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.pls)^2) # MSE_test
+```
+
+Predictions are generated from the PLS model. R^2 and MSE are computed for the test data.
+
+```{r}
+# Plotting the MSEP vs. Number of Components for PLS:
+msep_vals_pls <- MSEP(model.pls)
+msep_cv_pls <- msep_vals_pls$val["CV", 1, ]
+plot(msep_cv_pls, type = "b", xlab = "Number of Components", ylab = "MSEP", main = "MSEP vs Number of Components (PLS)")
+```
+
+The plot provides a visual assessment for determining the optimal number of components for the PLS model based on the MSEP.
+
+
+## Shrinkage Methods
+
+Shrinkage methods are regression techniques that include some form of regularization to avoid overfitting and handle multicollinearity.
+
+### Ridge Regression
+
+Ridge regression shrinks the coefficients towards zero using an L2 penalty, but doesn't force them to be exactly zero.
+
+```{r}
+# Load the necessary library
+library(MASS)
+
+# Fit the ridge regression for a sequence of lambda values
+model.ridge <- lm.ridge(body.fat~., data=fat, lambda=seq(0,15, by=0.2), subset=train)
+plot(model.ridge$lambda,model.ridge$GCV,type="l")
+```
+
+Here, the ridge regression model is fitted using `lm.ridge()` for various values of the penalty term `lambda`. The plot visualizes the Generalized Cross-Validation (GCV) as a function of `lambda`.
+
+```{r}
+# Select the optimal lambda value based on GCV
+select(model.ridge)
+lambda.opt <- model.ridge$lambda[which.min(model.ridge$GCV)]
+
+# Fit the ridge model using optimal lambda
+mod.ridge <- lm.ridge(body.fat~., data=fat, lambda = lambda.opt, subset=train)
+mod.ridge$coef # coefficients for scaled x
+
+ridge.coef <- coef(mod.ridge)
+ridge.coef # coefficients in original scale + intercept
+
+# Predict using the ridge model
+pred.ridge <- as.matrix(cbind(rep(1,length(test)),fat[test,-1]))%*%ridge.coef
+```
+
+After selecting the optimal `lambda` based on the lowest GCV, the ridge model is refitted using this `lambda`. Predictions are then generated.
+
+```{r}
+# Visualize actual vs predicted values
+plot(fat[test,"body.fat"],pred.ridge)
+abline(c(0,1))
+cor(fat[test,"body.fat"],pred.ridge)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.ridge)^2) # MSE_test
+```
+
+A plot of the actual vs. predicted values is presented with performance metrics R^2 and Mean Squared Error (MSE) for test data.
+
+
+### Lasso Regression
+
+Lasso regression uses an L1 penalty which can shrink coefficients exactly to zero, effectively performing feature selection.
+
+```{r}
+# Load the necessary library
+library(glmnet)
+
+# Fit the Lasso model
+res <- glmnet(as.matrix(fat[train,-1]),fat[train,1])
+print(res)
+plot(res)
+```
+
+The lasso regression model is fitted using `glmnet()`. A plot is presented that shows the path of coefficients as `lambda` changes.
+
+```{r}
+# Perform cross-validation to choose the best lambda
+res.cv <- cv.glmnet(as.matrix(fat[train,-1]),fat[train,1])
+plot(res.cv, main="Cross-validated MSE vs. Lambda in Lasso Regression", xlab="Log(Lambda)", ylab="MSE")
+abline(v = log(res.cv$lambda.min), col = "red", lty = "dashed")
+```
+
+Cross-validation is conducted to select the best value for `lambda` in the lasso regression. The plot visualizes Mean Squared Error (MSE) against the log of `lambda` values.
+
+```{r}
+# Coefficients for the selected lambda
+coef(res.cv,s="lambda.1se")
+
+# Predict using the Lasso model
+pred.lasso <- predict(res.cv,newx=as.matrix(fat[test,-1]),s="lambda.1se")
+cor(fat[test,"body.fat"],pred.lasso)^2 # R^2 for test data
+mean((fat[test,"body.fat"]-pred.lasso)^2) # MSE_test
+```
+
+The coefficients for the chosen `lambda` are presented. Predictions are then made using this model.
+
+```{r}
+# Visualize actual vs predicted values
+plot(fat[test,"body.fat"],pred.lasso)
+abline(c(0,1))
+```
+
+A plot of the actual vs. predicted values is displayed.
+
+## Linear Methods for Classification
+
+Linear methods for classification aim to find a linear boundary between classes. 
+
+### Data Preparation and Visualization
+
+```{r}
+# Load the data and visualize it
+library(mlbench)
+data(PimaIndiansDiabetes2)
+plot(PimaIndiansDiabetes2)
+
+# Handle missing values by omitting them
+pid <- na.omit(PimaIndiansDiabetes2)
+
+# Recoding the target variable for linear regression
+pidind <- pid
+ind <- ifelse(pid$diabetes == "neg", 0, 1)
+pidind$diabetes <- cbind(1 - ind, ind)
+```
+
+Here, we're loading the Pima Indians Diabetes dataset and visualizing it. After omitting missing values, we prepare the data for a linear regression approach by encoding the binary outcome as two separate columns.
+
+```{r}
+# Train a linear model for classification
+set.seed(101)
+train <- sample(1:nrow(pid), 300)
+mod.ind <- lm(diabetes ~ ., data = pidind[train,])
+summary(mod.ind)
+
+# Predict and assess accuracy
+mod.pred <- predict(mod.ind, newdata = pidind[-train,])
+class.pred <- apply(mod.pred, 1, which.max)
+TAB <- table(pid$diabetes[-train], class.pred)
+mklrate <- 1 - sum(diag(TAB)) / sum(TAB)
+mklrate
+```
+
+After splitting the dataset into training and testing sets, a linear regression model (`lm`) is trained. The prediction accuracy is computed using a misclassification rate.
+
+
+### Classical LDA (Linear Discriminant Analysis)
+
+LDA aims to maximize the distance between the means of two classes while minimizing the spread (as the variance) within each class.
+
+```{r}
+# Cross-Validation and Model Building for LDA
+library(MASS)
+library(ipred)
+mypred <- function(object, newdata) UseMethod("mypred", object)
+mypred.lda <- function(object, newdata) {predict(object, newdata = newdata)$class}
+CEE <- control.errorest(k = 5, nboot = 10)
+ldacvest <- errorest(diabetes ~ ., data = pid[train,], model = lda, predict = mypred, est.para = CEE)
+ldabest <- errorest(diabetes ~ ., data = pid[train,], model = lda, predict = mypred, estimator = "boot", est.para = CEE)
+
+# Train and predict using LDA
+mod.lda <- lda(diabetes ~ ., data = pid[train,])
+TAB <- table(pid[-train,]$diabetes, mypred(mod.lda, pid[-train,]))
+mkrlda <- 1 - sum(diag(TAB)) / sum(TAB)
+mkrlda
+```
+
+This code uses LDA for classification and assesses its performance with cross-validation. The accuracy is computed using a misclassification rate.
+
+
+### QDA (Quadratic Discriminant Analysis)
+
+QDA, like LDA, uses Bayes' theorem but assumes each class has its covariance matrix.
+
+```{r}
+# Train and predict using QDA
+set.seed(101)
+mod.qda <- qda(diabetes ~ ., data = pid[train,])
+predictqda <- predict(mod.qda, pid[-train,])
+TAB <- table(pid$diabetes[-train], predictqda$class)
+mkrqda <- 1 - sum(diag(TAB)) / sum(TAB)
+mkrqda
+```
+
+Here, we simply train a QDA model, make predictions on the test set, and compute the misclassification rate.
+
+
+### Regularized Discriminant Analysis
+
+This is a compromise between LDA and QDA, balancing between assuming a shared covariance matrix (LDA) and individual covariance matrices for each class (QDA).
+
+```{r}
+# RDA and its performance assessment
+library(klaR)
+mod.rda <- rda(diabetes ~ ., data = pid[train,])
+predictrda <- predict(mod.rda, pid[-train,])
+TAB <- table(pid$diabetes[-train], predictrda$class)
+mkrrda <- 1 - sum(diag(TAB)) / sum(TAB)
+mkrrda
+```
+
+This segment of code uses the `rda` function from the `klaR` package to fit the Regularized Discriminant Analysis model. Its performance is evaluated using a misclassification rate.
+
+
+### Logistic Regression
+
+Logistic Regression estimates the probability that a given instance belongs to a particular category.
+
+```{r}
+# Training a logistic regression model and assessing its performance
+set.seed(101)
+modelglm <- glm(diabetes ~ ., data = pid, family = binomial, subset = train)
+summary(modelglm)
+mod.glm <- step(modelglm, direction = "both")
+summary(mod.glm)
+anova(mod.glm, modelglm, test = "Chisq")
+```
+
+Here, a logistic regression model is trained, followed by a backward and forward stepwise selection process using the AIC criterion. The selected model is compared to the original full model.
+
+```{r}
+# Prediction and visualization
+plot(predict(mod.glm, pid[-train,]), col = as.numeric(pid$diabetes[-train]) + 2)
+modlda <- lda(diabetes ~ ., data = pid[train,])
+plot(predict(mod.glm, pid[-train,]), col = as.numeric(pid$diabetes[-train]) + 2, pch = as.numeric(predict(modlda, pid[-train,])$
+
+class))
+```
+
+This code predicts the test set's outcomes and visualizes the predictions. 
+
+```{r}
+# Cross-Validation for Logistic Regression
+mypred.glm = function(object, newdata) {
+    LEV = levels(object$model[, 1])
+    as.factor(LEV[(predict(object, newdata = newdata, type = "response") > 0.5) + 1])
+}
+logcvest <- errorest(diabetes ~ ., data = pid[train,], model = glm, family = binomial(), predict = mypred, est.para = CEE)
+logbest <- errorest(diabetes ~ ., data = pid[train,], model = glm, family = binomial(), predict = mypred, estimator = "boot", est.para = CEE)
+
+# Compute misclassification rate
+TAB <- table(pid$diabetes[-train], mypred(mod.glm, pid[-train,]))
+mkrlog <- 1 - sum(diag(TAB)) / sum(TAB)
+mkrlog
+```
+
+This segment conducts cross-validation for the logistic regression model and computes its misclassification rate.
+
+## Nonlinear Methods
+
+The `wtloss` dataset from the `MASS` package appears to be about tracking weight loss over a number of days. 
+
+### Polynomial Regression:
+
+```{r}
+# Plotting the weight against days
+plot(Weight ~ Days, data=wtloss)
+# Linear regression fit
+lm1 <- lm(Weight ~ Days, data=wtloss)
+abline(lm1, col="blue")
+
+# Quadratic regression fit
+lm2 <- lm(Weight ~ Days + I(Days^2), data=wtloss)
+x = c(wtloss$Days, seq(300,1000,length=50))
+lines(x, lm2$coef[1] + x*lm2$coef[2] + x^2*lm2$coef[3], col="green")
+```
+
+This section plots the weight loss data and fits both a linear and a quadratic model. The models are displayed using a blue line and a green curve, respectively.
+
+### Nonlinear Regression using Exponential Decay:
+
+```{r}
+# Fit a nonlinear regression using exponential decay
+mod.start <- c(b0=100, b1=85, theta=100)
+mod.nls <- nls(Weight ~ b0 + b1 * 2^(-Days/theta), data=wtloss, start=mod.start, trace=TRUE)
+
+# Plot the fitted curve
+plot(wtloss$Days, wtloss$Weight, xlim=c(0,1000), ylim=c(0,400))
+lines(x, predict(mod.nls, list(Days=x)), col="orange")
+
+# Optimization approach to fitting the same model
+funSSR <- function(p){ sum((wtloss$Weight - (p[1] + p[2] * 2^(-wtloss$Days/p[3])))^2) }
+mod.opt1 <- optim(mod.start, funSSR)
+```
+
+
+### Interpolation with Splines:
+
+Splines provide a flexible way to model nonlinear data by dividing the data into pieces and fitting polynomials.
+
+```{r}
+lecturespl <- function(x, nknots=2, M=4){
+ # nknots ... number of knots -> placed at regular quantiles
+ # M ... M-1 is the degree of the polynomial
+ n <- length(x)
+ # X will not get an intercept column
+ X <- matrix(NA,nrow=n,ncol=(M-1)+nknots)
+ for (i in 1:(M-1)){ X[,i] <- x^i }
+ # now the basis functions for the constraints:
+ quant <- seq(0,1,1/(nknots+1))[c(2:(nknots+1))]
+ qu <- quantile(x,quant)
+ for (i in M:(M+nknots-1)){
+ X[,i] <- ifelse(x-qu[i-M+1]<0,0,(x-qu[i-M+1])^(M-1))
+ }
+ list(X=X,quantiles=quant,xquantiles=qu)
+ }
+
+x <- seq(1,10,length=100)
+y <- sin(x) + 0.1 * rnorm(x)
+x1 <- seq(-1,12,length=100)
+plot(x, y, xlim = range(x1))
+spl <- lecturespl(x, nknots=2, M=4) # generate the bases based on the x data
+dim(spl$X) # generated matrix with spline basis functions
+spl$quantiles # quantiles of the knots
+spl$xquantiles # corresponding x-positions
+# Assuming x and y are defined
+# Example base plot
+plot(x, y, xlab="X", ylab="Y")  # Adjust the labels and title as needed
+
+spl <- lecturespl(x, nknots=2, M=4)
+lm1 <- lm(y ~ spl$X)
+lines(x, predict(lm1, newdata=data.frame(x=x)), col="blue")
+
+spl2 <- lecturespl(x, nknots=6, M=4)
+lm2 <- lm(y ~ spl2$X)
+lines(x, predict(lm2, newdata=data.frame(x=x)), col="green")
+```
+
+This part introduces a custom function for spline interpolation. It then uses the function to interpolate the given `x` and `y` data using splines with different numbers of knots.
+
+### Built-in Spline Functions:
+
+```{r}
+library(splines)
+matplot(x, bs(x, knots=5, degree=2), type="l",lty=1)
+matplot(x, bs(x, df=4, degree=3), type="l",lty=1)
+matplot(x, bs(x, knots=c(3,7), degree=3), type="l",lty=1)
+plot(x,y)
+lm1B <- lm(y ~ bs(x, df=4))
+lines(x1, predict.lm(lm1B, list(x=x1)), col="blue")
+lm2B <- lm(y ~ bs(x, df=6))
+lines(x1, predict.lm(lm2B, list(x=x1)), col="green")
+plot(x,y)
+lm3N <- lm(y ~ ns(x, df=6))
+lines(x1, predict.lm(lm3N, list(x=x1)), col="orange")
+```
+
+This part demonstrates the usage of the built-in `bs` function from the `splines` package to fit and plot splines of varying flexibility.
+
+### Smoothing Splines:
+
+```{r}
+m1 <- smooth.spline(x, y, df=6)
+plot(x, y, xlim = range(x1), ylim=c(-1.5, 1.5))
+lines(m1, col="green")
+m2 <- smooth.spline(x, y, cv=TRUE)
+lines(predict(m2, x1), col="blue")
+```
+
+Smoothing splines provide a method to fit data smoothly while controlling for overfitting. Here, a smooth spline is fitted to the data using both a fixed number of degrees of freedom and cross-validation.
+
+
+### Generalized Additive Models (GAMs):
+
+GAMs are extensions of linear models that allow for nonlinear relationships using smooth functions.
+
+```{r}
+library(mgcv)
+
+# Fit a GAM to the sin-curve data
+m1=gam(y ~ s(x))
+# Predict using the GAM for a new range of x values (x1)
+m1.pred = predict(m1, newdata = data.frame(x = x1), se.fit=TRUE)
+plot(x, y, xlim=range(x1))
+lines(x1, m1.pred$fit, col="blue")
+lines(x1, m1.pred$fit+2*m1.pred$se, col="orange",lty=2)
+lines(x1, m1.pred$fit-2*m1.pred$se, col="orange",lty=2)
+
+# Fit a GAM for diabetes classification
+set.seed(101)
+train = sample(1:nrow(pid),300)
+mod.gam <-gam(diabetes ~ s(pregnant)+s(insulin)+s(pressure)+s(triceps)+s(glucose)+s(age
+
+)+s(mass)+s(pedigree), data=pid, family="binomial", subset=train)
+```
+
+The first GAM fits a smooth curve to the sin-data. The second GAM is a logistic regression model for diabetes classification using smoothed versions of predictors.
+
+## Tree-based methods
+
+Tree-based methods use decision trees to predict an outcome based on several input features. The outcome can be continuous (for regression trees) or categorical (for classification trees).
+
+### Regression trees
+
+The `fat` dataset from the "UsingR" library contains body fat percentage data. Here, a decision tree is built to predict body fat percentage based on other features.
+
+1. **Data Preprocessing**:
+    - The data is loaded and some rows and columns are removed due to them being outliers or not required for our analysis.
+    - The data is then split into a training set and a test set.
+
+```{r}
+library("UsingR")
+data(fat)
+fat <- fat[-c(31,39,42,86), -c(1,3,4,9)] # strange values, not use all variables
+set.seed(123)
+n <- nrow(fat)
+train <- sample(1:n,round(n*2/3))
+test <- (1:n)[-train]
+```
+
+2. **Decision Tree Model**:
+    - The `rpart` package is used to train a decision tree model using the training data.
+    - The trained tree is then visualized.
+    - Predictions are made using the test data, and the root mean squared error (RMSE) is computed to assess the model's performance.
+    - A complexity parameter plot is made to see where the tree might be overfitting.
+    - The tree is pruned to avoid overfitting, and its performance is assessed on the test data again.
+
+```{r}
+library(rpart)
+mod.tree <- rpart(body.fat~.,data=fat, cp=0.001, xval=20, subset=train)
+plot(mod.tree)
+text(mod.tree)
+mod.tree.pred <- predict(mod.tree,newdata=fat[test,])
+RMSE <- sqrt(mean((fat$body.fat[test]-mod.tree.pred)^2))
+RMSE
+plotcp(mod.tree)
+mod2.tree <- prune(mod.tree,cp=0.042)
+mod2.tree.pred <- predict(mod2.tree,newdata=fat[test,])
+RMSE <- sqrt(mean((fat$body.fat[test]-mod2.tree.pred)^2))
+RMSE
+plot(mod2.tree)
+text(mod2.tree)
+```
+
+### Classification trees
+
+Here, the goal is to classify whether a bank client will subscribe to a term deposit (`y`) based on other features.
+
+1. **Data Loading & Preprocessing**:
+
+```{r}
+d <- read.csv2("bank.csv")
+d <- na.omit(d)
+attach(d)
+d$y<-ifelse(d$y=="yes",1,0)
+set.seed(101)
+train <- sample(1:nrow(d), 3000)
+```
+
+2. **Classification Tree Model**:
+
+```{r}
+library(rpart)
+tree1 <- rpart(y~.,data=d, xval=20, method="class",subset=train)
+plot(tree1)
+text(tree1)
+tree1.pred <- predict(tree1, d[-train,],type="class")
+tree1.tab <- table(d[-train, "y"], tree1.pred)
+tree1.tab
+1-sum(diag(tree1.tab))/sum(tree1.tab)
+printcp(tree1)
+plotcp(tree1,upper="size")
+tree2 <- prune(tree1, cp=0.022)
+plot(tree2)
+text(tree2)
+tree2.pred <- predict(tree2, d[-train,],type="class")
+tree2.tab <- table(d[-train, "y"], tree2.pred)
+tree2.tab
+1-sum(diag(tree2.tab))/sum(tree2.tab)
+```
+
+### Random Forest
+
+Random Forest is an ensemble learning method that uses multiple decision trees to make predictions. It can handle both regression and classification problems.
+
+1. **Basic Random Forest**:
+
+```{r}
+library(randomForest)
+rf <- randomForest(y~., data=d, subset=train,importance=TRUE)
+plot(rf)
+varImpPlot(rf)
+rf.pred <- predict(rf,d[-train,])
+rf.tab <- table(d[-train, "y"], rf.pred)
+1-sum(diag(rf.tab))/sum(rf.tab)
+```
+
+2. **Balancing Classes in Random Forest**:
+
+```{r}
+sum(d$y[train]==1)
+rf <- randomForest(as.factor(y)~., data=d, subset=train,importance=TRUE,sampsize = c(333,333))
+plot(rf)
+varImpPlot(rf)
+rf.pred <- predict(rf,d[-train,])
+rf.tab <- table(d[-train, "y"], rf.pred)
+rf.tab
+1-sum(diag(rf.tab))/sum(rf.tab)
+(sum(d$y[train]==1))/length(d$y[train])
+rf <- randomForest(as.factor(y)~., data=d, subset=train,importance=TRUE,classwt = c(01,2))
+plot(rf)
+varImpPlot(rf)
+rf.pred <- predict(rf,d[-train,])
+rf.tab <- table(d[-train, "y"], rf.pred)
+rf.tab
+1-sum(diag(rf.tab))/sum(rf.tab)
+rf <- randomForest(as.factor(y)~., data=d, subset=train,importance=TRUE,cutoff = c(0.6, 0.4))
+plot(rf)
+varImpPlot(rf)
+rf.pred <- predict(rf,d[-train,])
+rf.tab <- table(d[-train, "y"], rf.pred)
+rf.tab
+1-sum(diag(rf.tab))/sum(rf.tab)
+```
+
+Overall, tree-based methods like decision trees and random forests are versatile tools for both regression and classification problems. They provide interpretable models (especially decision trees) and can capture non-linear relationships in the data.
+
+
+## Support Vector Machines
+```{r}
+set.seed(1)
+x <- matrix(rnorm(20*2), ncol=2)
+y <- c(rep(-1,10), rep(1,10))
+x[y==1,] <- x[y==1,] + 1
+plot(x, col=y+3, xlab="x.1", ylab="x.2")
+dat <- data.frame(x=x, y=as.factor(y))
+library(e1071)
+res <- svm(y~., data=dat, kernel="linear",cost=10,scale=FALSE)
+plot(res, dat) # 1 misclassified, support vectors are crosses
+res$index # support vectors
+summary(res)
+res1 <- svm(y~., data=dat, kernel="linear",cost=0.1,scale=FALSE)
+plot(res1, dat)
+set.seed(1)
+res2 <- tune.svm(y~., data=dat, kernel="linear",cost=c(0.001,0.01,0.1,1,5,10,100))
+summary(res2)
+res2$best.model
+summary(res2$best.model)
+set.seed(1)
+xtest <- matrix(rnorm(20*2), ncol=2)
+ytest <- sample(c(-1,1),20,rep=TRUE)
+xtest[ytest==1,] <- xtest[ytest==1,] +1
+plot(xtest, col=ytest+3, xlab="x.1", ylab="x.2")
+testdat <- data.frame(x=xtest, y=as.factor(ytest))
+ypred <- predict(res2$best.model, testdat)
+table(truth=ypred, prediction=testdat$y)
+set.seed(1)
+x <- matrix(rnorm(200*2), ncol=2)
+x[1:100,] <- x[1:100,]+2
+x[101:150,] <- x[101:150,] -2
+y <- c(rep(1,150), rep(2,50))
+plot(x, col=y, xlab="x.1",ylab="x.2")
+dat <- data.frame(x=x, y=as.factor(y))
+train <- sample(200,100)
+res <- svm(y~., data=dat[train,], kernel="radial", gamma=1, cost=1)
+plot(res, dat[train,])
+res1 <- svm(y~., data=dat[train,], kernel="radial", gamma=1, cost=1e5)
+plot(res1, dat[train,])
+set.seed(1)
+res2 <- tune.svm(y~., data=dat[train,], kernel="radial",cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4))
+summary(res2)
+ypred <- predict(res2$best.model, dat[-train,])
+table(truth=ypred, prediction=dat$y[-train])
+```
+
+### Classiication exemple
+
+```{r}
+grp <- as.factor(pid[,9])
+x <- pid[,1:8]
+set.seed(100)
+train <- sample(1:nrow(pid),300)
+library(e1071)
+resSVM <- svm(x[train,],grp[train],kernel="radial")
+predSVM <- predict(resSVM,newdata=x[-train,])
+TAB1 <- table(predSVM,pid[-train,9])
+mkrSVM <- 1-sum(diag(TAB1))/sum(TAB1)
+mkrSVM
+tuneSVM <- tune.svm(x[train,],grp[train],gamma=2^(-10:0),cost=2^(-4:2),kernel="radial")
+tuneSVM
+plot(tuneSVM)
+resSVM <- svm(x[train,],grp[train],kernel="radial",gamma=2^-9,cost=2^2)
+predSVM <- predict(resSVM,newdata=x[-train,])
+TAB1 <- table(predSVM,pid[-train,9])
+mkrSVM <- 1-sum(diag(TAB1))/sum(TAB1)
+mkrSVM
+```
+
+### Regression example
+
+```{r}
+library("UsingR")
+data(fat)
+attach(fat)
+fat$body.fat[fat$body.fat==0]<-NA
+fat<-fat[,-cbind(1,3,4,9)]
+fat<-fat[-42,]
+fat[,4]<-fat[,4]*2.54
+fat <- na.omit(fat)
+set.seed(100)
+train=sample(1:nrow(fat),150)
+tuneSVM <- tune.svm(fat[train,-1],fat[train,1],gamma=2^(-8:0),cost=2^(-4:3),kernel="radial")
+tuneSVM
+plot(tuneSVM)
+resSVM <- svm(body.fat~.,data=fat,subset=train,kernel="radial",gamma=2^-5,cost=2^2)
+predSVM <- predict(resSVM,newdata=fat[-train,])
+RMSEtest <- sqrt(mean((fat$body.fat[-train]-predSVM)^2))
+RMSEtest
+```
+
+
+## Support Vector Machines
+
+Support Vector Machines (SVMs) are powerful algorithms used for classification and regression tasks. They work by finding a hyperplane that best divides a dataset into classes or approximates the function in the case of regression.
+
+### Basic SVM example
+
+Here we'll demonstrate a simple SVM classification:
+
+```{r}
+set.seed(1)
+x <- matrix(rnorm(20*2), ncol=2)
+y <- c(rep(-1,10), rep(1,10))
+x[y==1,] <- x[y==1,] + 1
+plot(x, col=y+3, xlab="x.1", ylab="x.2")
+dat <- data.frame(x=x, y=as.factor(y))
+library(e1071)
+res <- svm(y~., data=dat, kernel="linear",cost=10,scale=FALSE)
+plot(res, dat) # 1 misclassified, support vectors are crosses
+res$index # support vectors
+summary(res)
+res1 <- svm(y~., data=dat, kernel="linear",cost=0.1,scale=FALSE)
+plot(res1, dat)
+set.seed(1)
+res2 <- tune.svm(y~., data=dat, kernel="linear",cost=c(0.001,0.01,0.1,1,5,10,100))
+summary(res2)
+res2$best.model
+summary(res2$best.model)
+set.seed(1)
+xtest <- matrix(rnorm(20*2), ncol=2)
+ytest <- sample(c(-1,1),20,rep=TRUE)
+xtest[ytest==1,] <- xtest[ytest==1,] +1
+plot(xtest, col=ytest+3, xlab="x.1", ylab="x.2")
+testdat <- data.frame(x=xtest, y=as.factor(ytest))
+ypred <- predict(res2$best.model, testdat)
+table(truth=ypred, prediction=testdat$y)
+```
+
+### More SVM examples
+
+```{r}
+set.seed(1)
+x <- matrix(rnorm(200*2), ncol=2)
+x[1:100,] <- x[1:100,]+2
+x[101:150,] <- x[101:150,] -2
+y <- c(rep(1,150), rep(2,50))
+plot(x, col=y, xlab="x.1",ylab="x.2")
+dat <- data.frame(x=x, y=as.factor(y))
+train <- sample(200,100)
+res <- svm(y~., data=dat[train,], kernel="radial", gamma=1, cost=1)
+plot(res, dat[train,])
+res1 <- svm(y~., data=dat[train,], kernel="radial", gamma=1, cost=1e5)
+plot(res1, dat[train,])
+set.seed(1)
+res2 <- tune.svm(y~., data=dat[train,], kernel="radial",cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4))
+summary(res2)
+ypred <- predict(res2$best.model, dat[-train,])
+table(truth=ypred, prediction=dat$y[-train])
+```
+
+### Classification example
+
+For this example, we'll be working with the `pid` dataset:
+
+```{r}
+grp <- as.factor(pid[,9])
+x <- pid[,1:8]
+set.seed(100)
+train <- sample(1:nrow(pid),300)
+library(e1071)
+resSVM <- svm(x[train,],grp[train],kernel="radial")
+predSVM <- predict(resSVM,newdata=x[-train,])
+TAB1 <- table(predSVM,pid[-train,9])
+mkrSVM <- 1-sum(diag(TAB1))/sum(TAB1)
+mkrSVM
+tuneSVM <- tune.svm(x[train,],grp[train],gamma=2^(-10:0),cost=2^(-4:2),kernel="radial")
+tuneSVM
+plot(tuneSVM)
+resSVM <- svm(x[train,],grp[train],kernel="radial",gamma=2^-9,cost=2^2)
+predSVM <- predict(resSVM,newdata=x[-train,])
+TAB1 <- table(predSVM,pid[-train,9])
+mkrSVM <- 1-sum(diag(TAB1))/sum(TAB1)
+mkrSVM
+```
+
+### Regression example
+
+For regression, let's use the `fat` dataset from the `UsingR` package:
+
+```{r}
+library("UsingR")
+data(fat)
+attach(fat)
+fat$body.fat[fat$body.fat==0]<-NA
+fat<-fat[,-cbind(1,3,4,9)]
+fat<-fat[-42,]
+fat[,4]<-fat[,4]*2.54
+fat <- na.omit(fat)
+set.seed(100)
+train=sample(1:nrow(fat),150)
+tuneSVM <- tune.svm(fat[train,-1],fat[train,1],gamma=2^(-8:0),cost=2^(-4:3),kernel="radial")
+tuneSVM
+plot(tuneSVM)
+resSVM <- svm(body.fat~.,data=fat,subset=train,kernel="radial",gamma=2^-5,cost=2^2)
+predSVM <- predict(resSVM,newdata=fat[-train,])
+RMSEtest <- sqrt(mean((fat$body.fat[-train]-predSVM)^2))
+RMSEtest
+```
+
+In summary, Support Vector Machines offer a robust way to handle both classification and regression problems. Their hyperparameters, like the cost and kernel type, can significantly influence the model's performance, so tuning is essential.
