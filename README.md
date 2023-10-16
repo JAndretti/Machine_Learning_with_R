@@ -11,9 +11,9 @@ This repository presents various machine learning techniques using R.
 3. [PLS Regression (Partial Least Squares Regression)](#pls-regression-partial-least-squares-regression)
 4. [Shrinkage Methods](#shrinkage-methods)
 5. [Linear Methods for Classification](#Linear-Methods-for-Classification)
-6. [Nonlinear Methods](Nonlinear-Methods)
-7. [Tree-Based Methods](Tree-Based-Methods)
-8. [Support Vector Machines (SVM)](Support-Vector-Machines-(SVM))
+6. [Nonlinear Methods](#Nonlinear-Methods)
+7. [Tree-Based Methods](#Tree-Based-Methods)
+8. [Support Vector Machines (SVM)](#Support-Vector-Machines-(SVM))
 
 ---
 
@@ -65,6 +65,8 @@ Lasso regression uses an L1 penalty which can shrink coefficients exactly to zer
 - Cross-validation was conducted to select the best value for `lambda`.
 - Predictions were made using the selected model and visualized against actual values.
 
+---
+
 ## Linear Methods for Classification
 
 Linear methods for classification aim to find a linear boundary between classes. 
@@ -92,6 +94,8 @@ Regularized Discriminant Analysis, a compromise between LDA and QDA, is used. It
 ### Logistic Regression
 
 Logistic Regression is employed to estimate the probability that a given instance belongs to a particular category. A logistic regression model is trained on the data, followed by a stepwise feature selection process using the Akaike information criterion (AIC). Predictions made on the test set are then visualized. Subsequently, cross-validation is conducted for the logistic regression model, and its performance is assessed using the misclassification rate.
+
+---
 
 ## Nonlinear Methods
 
@@ -133,6 +137,8 @@ Logistic Regression is employed to estimate the probability that a given instanc
 3. **Splines:** Allow for flexible data modeling by dividing the data into sections and fitting polynomials.
 4. **Smoothing Splines:** Offer a method to fit data smoothly while controlling for overfitting.
 5. **GAMs:** Extend linear models by permitting nonlinear relationships through smooth functions.
+
+---
 
 ## Tree-Based Methods
 
@@ -179,6 +185,7 @@ Random Forest is an ensemble of decision trees. By training multiple trees and a
 
 In conclusion, tree-based techniques, from basic decision trees to the ensemble method of Random Forests, offer powerful tools for data analysis. They're particularly notable for their ability to model complex, non-linear relationships and provide insights into the data.
 
+---
 
 ## Support Vector Machines (SVM)
 
