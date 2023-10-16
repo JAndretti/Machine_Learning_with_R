@@ -5,19 +5,72 @@ ___
 
 This repository presents various machine learning techniques using R. 
 
-## Table of Contents
-1. [Least Squares (LS)](#least-squares-ls)
-2. [PCR (Principal Component Regression)](#pcr-principal-component-regression)
-3. [PLS Regression (Partial Least Squares Regression)](#pls-regression-partial-least-squares-regression)
-4. [Shrinkage Methods](#shrinkage-methods)
-5. [Linear Methods for Classification](#Linear-Methods-for-Classification)
-6. [Nonlinear Methods](#Nonlinear-Methods)
-7. [Tree-Based Methods](#Tree-Based-Methods)
-8. [Support Vector Machines (SVM)](#Support-Vector-Machines-(SVM))
+**Table of Contents:**
 
 ---
 
-## Least Squares (LS)
+1. [**Least Squares (LS)**](#least-squares)
+   - [Generation of the Data](#generation-of-the-data)
+   - [Model Training](#model-training)
+   - [Model Comparison](#model-comparison)
+   - [Body Fat Data Analysis](#body-fat-data-analysis)
+   
+---
+
+2. [**PCR (Principal Component Regression)**](#pcr)
+   - [Built a PCR model](#built-a-pcr-model)
+   - [MSEP vs. Number of Components](#msep-vs-number-of-components)
+   
+---
+
+3. [**PLS Regression (Partial Least Squares Regression)**](#pls-regression)
+   - [Built a PLS regression model](#built-a-pls-regression-model)
+   - [MSEP vs. Number of Components](#msep-vs-number-of-components-pls)
+   
+---
+
+4. [**Shrinkage Methods**](#shrinkage-methods)
+   - [Ridge Regression](#ridge-regression)
+   - [Lasso Regression](#lasso-regression)
+   
+---
+
+5. [**Linear Methods for Classification**](#linear-methods-for-classification)
+   - [Data Preparation and Visualization](#data-preparation-and-visualization)
+   - [Linear Regression for Classification](#linear-regression-for-classification)
+   - [Classical LDA](#classical-lda)
+   - [QDA](#qda)
+   - [Regularized Discriminant Analysis](#regularized-discriminant-analysis)
+   - [Logistic Regression](#logistic-regression)
+   
+---
+
+6. [**Nonlinear Methods**](#nonlinear-methods)
+   - [Polynomial Regression](#polynomial-regression)
+   - [Nonlinear Regression using Exponential Decay](#nonlinear-regression-using-exponential-decay)
+   - [Interpolation with Splines](#interpolation-with-splines)
+   - [Built-in Spline Functions](#built-in-spline-functions)
+   - [Smoothing Splines](#smoothing-splines)
+   - [Generalized Additive Models (GAMs)](#gams)
+   
+---
+
+7. [**Tree-Based Methods**](#tree-based-methods)
+   - [Regression Trees](#regression-trees)
+   - [Classification Trees](#classification-trees)
+   - [Random Forests](#random-forests)
+   
+---
+
+8. [**Support Vector Machines (SVM)**](#svm)
+   - [Basic SVM Example](#basic-svm-example)
+   - [More SVM Examples](#more-svm-examples)
+   - [Classification Example](#classification-example-svm)
+   - [Regression Example](#regression-example-svm)
+
+---
+
+## Least Squares (LS) 
 
 - **Generation of the Data:** Synthetic data generated and relationships visualized.
 - **Model Training:** Three linear regression models were trained.
